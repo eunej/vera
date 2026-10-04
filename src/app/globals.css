@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 18% 5%;
+    --foreground: 210 20% 94%;
+    --card: 220 16% 8%;
+    --card-foreground: 210 20% 94%;
+    --popover: 220 16% 8%;
+    --popover-foreground: 210 20% 94%;
+    --primary: 152 72% 48%;
+    --primary-foreground: 160 40% 6%;
+    --secondary: 220 14% 12%;
+    --secondary-foreground: 210 16% 86%;
+    --muted: 220 12% 12%;
+    --muted-foreground: 215 10% 58%;
+    --accent: 220 14% 14%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 12% 16%;
+    --input: 220 12% 16%;
+    --ring: 152 72% 48%;
+    --radius: 0.5rem;
+    --panel: 220 16% 7.5%;
+    --line: 220 12% 18%;
+    --glow: 152 72% 48%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  ::selection {
+    background: hsl(152 72% 48% / 0.28);
+  }
+}
+
+@layer utilities {
+  .vera-shell {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(ellipse 50% 35% at 15% 0%, hsl(152 60% 35% / 0.12), transparent 55%),
+      radial-gradient(ellipse 40% 30% at 90% 10%, hsl(210 50% 40% / 0.1), transparent 50%),
+      linear-gradient(hsl(220 12% 18% / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(220 12% 18% / 0.35) 1px, transparent 1px);
+    background-size: auto, auto, 64px 64px, 64px 64px;
+  }
+
+  .panel {
+    @apply rounded-lg border border-[hsl(var(--line))] bg-[hsl(var(--panel))];
+  }
+
+  .label {
+    @apply font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground;
+  }
+
+  .reveal {
+    animation: reveal-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .reveal-d1 { animation-delay: 0.06s; }
+  .reveal-d2 { animation-delay: 0.12s; }
+  .reveal-d3 { animation-delay: 0.18s; }
+  .reveal-d4 { animation-delay: 0.24s; }
+  .reveal-d5 { animation-delay: 0.3s; }
+  .reveal-d6 { animation-delay: 0.36s; }
+
+  .status-dot {
+    box-shadow: 0 0 0 0 hsl(var(--glow) / 0.5);
+    animation: status-pulse 2.2s ease-out infinite;
+  }
+
+  .meter-fill {
+    animation: meter-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .settle-flash {
+    animation: settle-flash 1.2s ease-out both;
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes status-pulse {
+  0% { box-shadow: 0 0 0 0 hsl(var(--glow) / 0.45); }
+  70% { box-shadow: 0 0 0 8px hsl(var(--glow) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--glow) / 0); }
+}
+
+@keyframes meter-grow {
+  from { transform: scaleX(0); transform-origin: left; }
+  to { transform: scaleX(1); transform-origin: left; }
+}
+
+@keyframes settle-flash {
+  0% { background-color: hsl(152 72% 48% / 0.18); }
+  100% { background-color: transparent; }
+}
