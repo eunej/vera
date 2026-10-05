@@ -28,9 +28,9 @@ const ICONS: Record<
 };
 
 export function isVeraDemoControlsEnabled(): boolean {
-  if (process.env.NEXT_PUBLIC_VERA_DEMO_CONTROLS === "1") return true;
+  // Demo page always exposes all scenarios unless explicitly disabled.
   if (process.env.NEXT_PUBLIC_VERA_DEMO_CONTROLS === "0") return false;
-  return process.env.NODE_ENV !== "production";
+  return true;
 }
 
 type DemoControlPanelProps = {
@@ -50,7 +50,7 @@ export function DemoControlPanel({
         <div>
           <p className="label">Demo control panel</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Developer-only · hidden in production builds
+            Four scenarios · pick one and run the live flow
           </p>
         </div>
         <span className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-amber-200">
@@ -60,7 +60,7 @@ export function DemoControlPanel({
 
       <div className="px-4 py-3">
         <p className="label mb-2">Scenario</p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {DEMO_SCENARIOS.map((id) => {
             const s = SCENARIOS[id];
             const active = scenarioId === id;
