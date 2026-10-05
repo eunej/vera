@@ -8,7 +8,8 @@
     "wallet:generate": "node scripts/generate-devnet-wallet.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsx --test src/lib/x402/procure.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.15",

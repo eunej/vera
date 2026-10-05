@@ -1,14 +1,10 @@
 /**
- * MOCK / DEMO Solana USDC settlement.
+ * LEGACY — MOCK Solana USDC settlement (NOT used by the primary Vera demo).
  *
- * Does NOT:
- * - hold custody
- * - request wallet signatures
- * - broadcast transactions
- * - touch mainnet or devnet RPCs
+ * The live demo settles via real x402 V2 on Solana Devnet
+ * (`src/lib/x402/client.ts`). This adapter only simulates receipts offline.
  *
- * Replace this adapter with a real x402 / SPL USDC implementation later
- * by swapping the export in `src/lib/settlement/index.ts`.
+ * Does NOT hold custody, request signatures, or broadcast transactions.
  */
 
 import type {

@@ -112,3 +112,131 @@
   0% { background-color: hsl(152 72% 48% / 0.18); }
   100% { background-color: transparent; }
 }
+
+/* Story / positioning page */
+.story-hero-plane {
+  background-image:
+    radial-gradient(ellipse 55% 50% at 78% 42%, hsl(152 60% 32% / 0.22), transparent 62%),
+    radial-gradient(ellipse 40% 35% at 12% 80%, hsl(210 45% 28% / 0.16), transparent 55%),
+    linear-gradient(180deg, transparent 55%, hsl(220 18% 5% / 0.92) 100%);
+}
+
+.story-reveal {
+  animation: reveal-up 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.story-d1 { animation-delay: 0.08s; }
+.story-d2 { animation-delay: 0.16s; }
+.story-d3 { animation-delay: 0.24s; }
+
+.story-option-path {
+  stroke-dasharray: 420;
+  stroke-dashoffset: 420;
+  animation: story-draw 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.story-settle-path {
+  stroke-dasharray: 160;
+  stroke-dashoffset: 160;
+  animation: story-draw 1.2s 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.story-gate {
+  animation: story-gate-in 0.8s 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.story-pulse-node {
+  animation: story-node-pulse 2.4s 2.4s ease-out infinite;
+}
+
+.story-token {
+  opacity: 0;
+  animation: story-token-fade 4.8s 2.6s ease-in-out infinite;
+}
+
+.story-scan {
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    hsl(152 72% 48% / 0.08) 50%,
+    transparent 60%
+  );
+  background-size: 220% 100%;
+  animation: story-scan 4.5s ease-in-out infinite;
+}
+
+.story-market-glow {
+  background:
+    radial-gradient(ellipse 50% 40% at 50% 0%, hsl(152 55% 30% / 0.14), transparent 70%);
+}
+
+.story-metric {
+  animation: reveal-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.story-value-row {
+  transition: background-color 0.25s ease;
+}
+
+.story-value-row:hover {
+  background-color: hsl(152 72% 48% / 0.03);
+}
+
+@keyframes story-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes story-gate-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes story-node-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.72;
+  }
+}
+
+@keyframes story-token-fade {
+  0%, 8% { opacity: 0; }
+  18%, 88% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes story-scan {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-reveal,
+  .story-option-path,
+  .story-settle-path,
+  .story-gate,
+  .story-pulse-node,
+  .story-token,
+  .story-scan,
+  .story-metric {
+    animation: none !important;
+  }
+
+  .story-option-path,
+  .story-settle-path {
+    stroke-dashoffset: 0;
+  }
+
+  .story-token {
+    opacity: 0;
+  }
+}

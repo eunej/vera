@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="Vera">
+  <!-- Rounded tile; V exists only as negative space -->
+  <path
+    fill="currentColor"
+    fill-rule="evenodd"
+    clip-rule="evenodd"
+    d="M7.5 2h17A5.5 5.5 0 0 1 30 7.5v17a5.5 5.5 0 0 1-5.5 5.5h-17A5.5 5.5 0 0 1 2 24.5v-17A5.5 5.5 0 0 1 7.5 2ZM10.4 9.2 16 22.4 21.6 9.2h-2.15L16 17.6 12.55 9.2H10.4Z"
+  />
+</svg>

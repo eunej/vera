@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" fill="none" role="img" aria-label="Vera">
+  <g transform="translate(6, 8)">
+    <g stroke="#FFFFFF" stroke-width="1.45" stroke-linecap="square">
+      <path d="M5 6.25 L16 24.1"/>
+      <path d="M10.5 6.25 L16 24.1"/>
+      <path d="M16 6.25 L16 24.1"/>
+      <path d="M21.5 6.25 L16 24.1"/>
+      <path d="M27 6.25 L16 24.1"/>
+    </g>
+    <circle cx="16" cy="25.55" r="1.35" fill="#6B7AFF"/>
+  </g>
+  <text
+    x="50"
+    y="31"
+    fill="#FFFFFF"
+    font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-size="24"
+    font-weight="500"
+    letter-spacing="0.08em"
+  >vera</text>
+</svg>

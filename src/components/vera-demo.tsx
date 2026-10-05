@@ -13,10 +13,16 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+// Primary settlement UI — REAL x402 only (never SettlementPanel / mock-solana).
 import {
   LivePaymentPanel,
   type LivePaymentUiStatus,
 } from "@/components/live-payment-panel";
+import {
+  DemoControlPanel,
+  isVeraDemoControlsEnabled,
+} from "@/components/demo-control-panel";
+import { ProcurementEconomics } from "@/components/procurement-economics";
 import { WhyVera } from "@/components/why-vera";
 import { FLOW_STAGES, SCENARIOS, SMART_RECOMMENDATION } from "@/lib/mock-data";
 import {
@@ -24,7 +30,9 @@ import {
   recommendProvider,
   SCORE_WEIGHTS,
 } from "@/lib/procurement";
+import type { ProcurementDecision } from "@/lib/x402/decision";
 import type { ProcureResponse } from "@/lib/x402/types";
+import type { ProcureTraceEvent } from "@/lib/x402/trace";
 import type { DecisionVerdict, ScenarioId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -68,17 +76,24 @@ export function VeraDemo() {
   const [liveExplorer, setLiveExplorer] = useState<string | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [resourceReceived, setResourceReceived] = useState(false);
+  const [liveTrace, setLiveTrace] = useState<ProcureTraceEvent[]>([]);
+  const [liveDecision, setLiveDecision] = useState<ProcurementDecision | null>(
+    null
+  );
   const timers = useRef<number[]>([]);
   const settleGen = useRef(0);
   const decisionRef = useRef<HTMLDivElement>(null);
 
   const scenario = SCENARIOS[scenarioId];
   const isSuspicious = scenarioId === "suspicious";
+  const isAsk = scenarioId === "ask";
+  const isExpensive = scenarioId === "expensive";
+  const showDemoControls = isVeraDemoControlsEnabled();
   const settled = liveStatus === "settled";
 
   const recommendation = useMemo(() => {
-    if (scenarioId === "smart") return SMART_RECOMMENDATION;
-    // Suspicious: score catalog for inspectability; gaming fails relevance gate.
+    if (scenarioId === "smart" || scenarioId === "ask")
+      return SMART_RECOMMENDATION;
     return recommendProvider(
       scenario.providers,
       {
@@ -95,6 +110,46 @@ export function VeraDemo() {
     );
     return map;
   }, [recommendation]);
+
+  /** Derived from live decision when available; otherwise from deterministic recommendation. */
+  const economics = useMemo(() => {
+    const requestedUsd =
+      liveDecision?.requestedPrice ?? scenario.request.priceUsd;
+    const recommendedUsd =
+      liveDecision?.recommendedPrice ??
+      recommendation.recommended.provider.priceUsd;
+    const blocked =
+      outcome === "blocked" ||
+      liveStatus === "blocked" ||
+      liveDecision?.policyDecision === "BLOCK";
+    const actualUsd = blocked ? 0 : recommendedUsd;
+    const savedUsd =
+      Math.max(0, Math.round((requestedUsd - actualUsd) * 100) / 100);
+    const savingsPct =
+      requestedUsd > 0 ? Math.round((savedUsd / requestedUsd) * 100) : 0;
+    const budgetUsd = scenario.mission.budgetUsd;
+    const spentUsd = settled ? actualUsd : 0;
+    const remainingUsd =
+      Math.round((budgetUsd - spentUsd) * 100) / 100;
+    return {
+      requestedUsd,
+      actualUsd,
+      savedUsd,
+      savingsPct,
+      budgetUsd,
+      spentUsd,
+      remainingUsd,
+      blocked,
+    };
+  }, [
+    liveDecision,
+    scenario.request.priceUsd,
+    scenario.mission.budgetUsd,
+    recommendation.recommended.provider.priceUsd,
+    outcome,
+    liveStatus,
+    settled,
+  ]);
 
   function clearTimers() {
     timers.current.forEach((t) => window.clearTimeout(t));
@@ -130,6 +185,8 @@ export function VeraDemo() {
     setLiveExplorer(null);
     setLiveError(null);
     setResourceReceived(false);
+    setLiveTrace([]);
+    setLiveDecision(null);
   }
 
   async function runLiveProcurement(opts: {
@@ -137,29 +194,129 @@ export function VeraDemo() {
     confirmAsk?: boolean;
   }) {
     const gen = ++settleGen.current;
-    const expectPayment = opts.scenario === "smart";
-    setLiveStatus(expectPayment ? "settling" : "decided");
+    const willAttemptPayment =
+      opts.scenario !== "ask" || opts.confirmAsk === true;
+    setLiveStatus(willAttemptPayment ? "settling" : "decided");
     setLiveTx(null);
     setLiveExplorer(null);
     setLiveError(null);
     setResourceReceived(false);
-    if (expectPayment) setStep(5);
+    setLiveTrace([]);
+    setLiveDecision(null);
+    if (willAttemptPayment || opts.scenario === "suspicious") setStep(5);
 
     try {
       const res = await fetch("/api/vera/procure", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson",
+        },
         body: JSON.stringify({
           scenario: opts.scenario,
           confirmAsk: opts.confirmAsk,
+          stream: true,
         }),
       });
 
-      const data = (await res.json()) as ProcureResponse;
+      if (!res.ok && !res.body) {
+        throw new Error(`Procure failed (HTTP ${res.status})`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("No response stream from Vera procure");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult: ProcureResponse | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (gen !== settleGen.current) return;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          let event: ProcureTraceEvent;
+          try {
+            event = JSON.parse(trimmed) as ProcureTraceEvent;
+          } catch {
+            continue;
+          }
+
+          setLiveTrace((prev) => [...prev, event]);
+
+          if (event.type === "confirmed") {
+            setLiveTx(event.transaction);
+            setLiveExplorer(event.explorerUrl);
+          }
+          if (event.type === "resource") {
+            setResourceReceived(true);
+          }
+          if (event.type === "recommendation") {
+            setLiveDecision((prev) => ({
+              missionId: prev?.missionId ?? "mission-depin-1",
+              resource: prev?.resource ?? scenario.request.purpose,
+              provider: event.provider,
+              requestedPrice: event.requestedPrice,
+              recommendedPrice: event.priceUsd,
+              savings: Math.max(
+                0,
+                Math.round((event.requestedPrice - event.priceUsd) * 100) / 100
+              ),
+              intentScore: prev?.intentScore ?? 0,
+              riskScore: prev?.riskScore ?? 0,
+              policyDecision: prev?.policyDecision ?? "APPROVE",
+              reason: prev?.reason ?? "",
+              recommendedProvider: event.provider,
+              requestedProvider: event.requestedProvider,
+            }));
+          }
+          if (event.type === "policy") {
+            setLiveDecision((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    policyDecision: event.decision,
+                    reason: event.reason ?? prev.reason,
+                  }
+                : prev
+            );
+          }
+          if (event.type === "done") {
+            finalResult = event.result as ProcureResponse;
+            const decision = (event.result as ProcureResponse)?.decision;
+            if (decision) setLiveDecision(decision);
+          }
+          if (event.type === "failed") {
+            setLiveError(
+              event.message + (event.detail ? ` — ${event.detail}` : "")
+            );
+          }
+        }
+      }
 
       if (gen !== settleGen.current) return;
 
-      if (data.payment?.status === "blocked") {
+      const data = finalResult;
+      if (data?.payment?.status === "ask") {
+        setOutcome("none");
+        setLiveStatus("decided");
+        setAwaitingAction(true);
+        setStep(4);
+        setRunning(false);
+        setComplete(false);
+        return;
+      }
+
+      if (data?.payment?.status === "blocked") {
         setOutcome("blocked");
         setLiveStatus("blocked");
         setStep(6);
@@ -168,8 +325,8 @@ export function VeraDemo() {
         return;
       }
 
-      if (data.payment?.status === "settled") {
-        setOutcome(opts.scenario === "suspicious" ? "overridden" : "approved");
+      if (data?.payment?.status === "settled" && data.payment.transaction) {
+        setOutcome("approved");
         setLiveStatus("settled");
         setLiveTx(data.payment.transaction);
         setLiveExplorer(data.payment.explorerUrl);
@@ -182,11 +339,13 @@ export function VeraDemo() {
 
       // Do not fake Settled — surface the real failure.
       setLiveStatus("failed");
-      setLiveError(
-        data.payment?.status === "failed"
-          ? data.payment.message +
+      setLiveError((prev) =>
+        prev
+          ? prev
+          : data?.payment?.status === "failed"
+            ? data.payment.message +
               (data.payment.detail ? ` — ${data.payment.detail}` : "")
-          : `Unexpected response (HTTP ${res.status})`
+            : "Settlement did not confirm a Solana transaction"
       );
       setStep(5);
       setRunning(false);
@@ -219,6 +378,8 @@ export function VeraDemo() {
     setLiveExplorer(null);
     setLiveError(null);
     setResourceReceived(false);
+    setLiveTrace([]);
+    setLiveDecision(null);
 
     schedule(() => setFactorCount(1), 450);
     schedule(() => setFactorCount(2), 1000);
@@ -239,6 +400,20 @@ export function VeraDemo() {
       return;
     }
 
+    if (isAsk) {
+      schedule(() => setStep(2), SUSPICIOUS_TIMING[2]);
+      schedule(() => setFactorCount(3), SUSPICIOUS_TIMING[2] + 400);
+      schedule(() => setStep(3), SUSPICIOUS_TIMING[3]);
+      schedule(() => setFactorCount(4), SUSPICIOUS_TIMING[3] + 350);
+      schedule(() => setFactorCount(5), SUSPICIOUS_TIMING[3] + 850);
+      schedule(() => setStep(4), SUSPICIOUS_TIMING[4]);
+      schedule(() => {
+        setLiveStatus("decided");
+        void runLiveProcurement({ scenario: "ask" });
+      }, SUSPICIOUS_TIMING.awaitAction);
+      return;
+    }
+
     schedule(() => setStep(2), SMART_TIMING[2]);
     schedule(() => setFactorCount(3), SMART_TIMING[2] + 500);
 
@@ -250,7 +425,9 @@ export function VeraDemo() {
     schedule(() => {
       setOutcome("approved");
       setLiveStatus("decided");
-      void runLiveProcurement({ scenario: "smart" });
+      void runLiveProcurement({
+        scenario: isExpensive ? "expensive" : "smart",
+      });
     }, SMART_TIMING[5]);
   }
 
@@ -273,11 +450,34 @@ export function VeraDemo() {
     setRunning(false);
   }
 
+  function approveAskPurchase() {
+    setAwaitingAction(false);
+    setRunning(true);
+    setOutcome("approved");
+    setLiveStatus("settling");
+    void runLiveProcurement({ scenario: "ask", confirmAsk: true });
+  }
+
+  function rejectAskPurchase() {
+    setAwaitingAction(false);
+    setOutcome("blocked");
+    setLiveStatus("blocked");
+    setLiveError("Human rejected payment — no x402 settlement initiated.");
+    setLiveTx(null);
+    setLiveExplorer(null);
+    setStep(6);
+    setComplete(true);
+    setRunning(false);
+  }
+
   const statusText = (() => {
     if (step === 0) return "Ready for procurement";
+    if (awaitingAction && isAsk) return "ASK · waiting for human approval";
     if (awaitingAction) return "Policy decision needs confirmation";
     if (liveStatus === "settling") return "LIVE · Settling on Solana Devnet…";
     if (liveStatus === "failed") return "LIVE · Settlement failed";
+    if (complete && outcome === "blocked" && isAsk)
+      return "Rejected · no payment";
     if (complete && outcome === "blocked")
       return "BLOCKED BEFORE PAYMENT";
     if (complete && outcome === "overridden")
@@ -339,7 +539,14 @@ export function VeraDemo() {
 
   return (
     <main className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
-      {/* Scenario switcher */}
+      {showDemoControls ? (
+        <DemoControlPanel
+          scenarioId={scenarioId}
+          running={running}
+          onSelect={switchScenario}
+        />
+      ) : (
+      /* Production: only public pitch scenarios */
       <section className="mb-4 grid gap-2 sm:grid-cols-2">
         {(["smart", "suspicious"] as const).map((id) => {
           const s = SCENARIOS[id];
@@ -387,6 +594,7 @@ export function VeraDemo() {
           );
         })}
       </section>
+      )}
 
       {/* Control bar */}
       <section className="panel mb-4 overflow-hidden">
@@ -488,6 +696,19 @@ export function VeraDemo() {
           })}
         </div>
       </section>
+
+      {/* Economics — derived from procurement decision / mission, never hardcoded */}
+      <ProcurementEconomics
+        className="mb-4 reveal"
+        requestedUsd={economics.requestedUsd}
+        actualUsd={economics.actualUsd}
+        savedUsd={economics.savedUsd}
+        savingsPct={economics.savingsPct}
+        budgetUsd={economics.budgetUsd}
+        spentUsd={economics.spentUsd}
+        remainingUsd={economics.remainingUsd}
+        blocked={economics.blocked}
+      />
 
       {/* Idle */}
       {step === 0 && (
@@ -848,7 +1069,59 @@ export function VeraDemo() {
                 danger={isSuspicious && outcome !== "overridden"}
               />
               <div className="px-5 py-6 sm:px-7 sm:py-7">
-                {isSuspicious && outcome !== "overridden" ? (
+                {isAsk && (awaitingAction || outcome === "blocked" || settled) ? (
+                  <>
+                    <p className="inline-flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/15 px-4 py-2 font-mono text-base font-semibold tracking-[0.18em] text-amber-200 sm:text-lg">
+                      <UserRoundCheck className="size-5" />
+                      ASK
+                    </p>
+                    <p className="mt-5 max-w-2xl text-lg font-medium leading-snug tracking-tight sm:text-xl">
+                      {scenario.decision.reason}
+                    </p>
+                    <div className="mt-5 space-y-2 rounded-md border border-[hsl(var(--line))] bg-secondary/30 px-4 py-4">
+                      <p className="text-sm text-foreground/90">
+                        {scenario.decision.recommendation}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Approve runs real x402 on Solana Devnet. Reject creates
+                        no transaction.
+                      </p>
+                    </div>
+                    {awaitingAction && (
+                      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+                        <Button
+                          size="lg"
+                          className="h-12 flex-1 font-semibold tracking-wide"
+                          onClick={approveAskPurchase}
+                        >
+                          <Check className="size-4" />
+                          Approve · pay ${scenario.decision.selectedAmountUsd.toFixed(2)}
+                        </Button>
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="h-12 flex-1 font-semibold tracking-wide"
+                          onClick={rejectAskPurchase}
+                        >
+                          <X className="size-4" />
+                          Reject · no payment
+                        </Button>
+                      </div>
+                    )}
+                    {outcome === "blocked" && !awaitingAction && (
+                      <p className="mt-6 flex items-center gap-2 text-sm text-destructive">
+                        <X className="size-4" />
+                        Human rejected — no Solana transaction created.
+                      </p>
+                    )}
+                    {settled && (
+                      <p className="mt-6 flex items-center gap-2 text-sm text-primary">
+                        <Check className="size-4" />
+                        Human approved — payment settled on Solana Devnet.
+                      </p>
+                    )}
+                  </>
+                ) : isSuspicious && outcome !== "overridden" ? (
                   <>
                     <p className="inline-flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/15 px-4 py-2 font-mono text-base font-semibold tracking-[0.18em] text-destructive sm:text-lg">
                       <X className="size-5" strokeWidth={2.5} />
@@ -967,9 +1240,11 @@ export function VeraDemo() {
               decisionLabel={
                 outcome === "blocked" || liveStatus === "blocked"
                   ? "Blocked"
-                  : outcome === "approved" || settled
-                    ? "Approved"
-                    : "—"
+                  : isAsk && (awaitingAction || liveStatus === "decided")
+                    ? "Ask"
+                    : outcome === "approved" || settled
+                      ? "Approved"
+                      : "—"
               }
               provider={settlementProvider}
               priceUsd={
@@ -984,6 +1259,7 @@ export function VeraDemo() {
               blockedBeforePayment={
                 outcome === "blocked" || liveStatus === "blocked"
               }
+              trace={liveTrace}
             />
           )}
 

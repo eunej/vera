@@ -98,7 +98,21 @@ const SUSPICIOUS_MISSION_OPTIONS = recommendProvider(
   }
 );
 
-export const SCENARIOS: Record<"smart" | "suspicious", Scenario> = {
+const EXPENSIVE_RECOMMENDATION = recommendProvider(
+  SMART_PROVIDERS,
+  {
+    ...DEMO_MISSION_REQUIREMENTS,
+    maxPriceUsd: SHARED_MISSION.remainingUsd,
+  },
+  "PremiumData"
+);
+
+const ASK_RECOMMENDATION = SMART_RECOMMENDATION;
+
+export const SCENARIOS: Record<
+  "smart" | "suspicious" | "expensive" | "ask",
+  Scenario
+> = {
   smart: {
     id: "smart",
     label: "Smart Purchase",
@@ -202,6 +216,115 @@ export const SCENARIOS: Record<"smart" | "suspicious", Scenario> = {
     budgetOnlySays: "$3.20 < $5.00 → allowed",
     veraSays:
       "$3.20 is within budget, but unrelated to the mission → BLOCKED",
+  },
+  expensive: {
+    id: "expensive",
+    label: "Expensive Provider",
+    blurb:
+      "Agent requests PremiumData at a high price — Vera recommends the cheaper eligible option.",
+    mission: SHARED_MISSION,
+    request: {
+      purpose: "Historical SOL market data",
+      provider: "PremiumData",
+      priceUsd: 0.4,
+      agentName: "research-agent-01",
+    },
+    providers: withRecommendationFlags(
+      SMART_PROVIDERS.map((p) => ({
+        ...p,
+        requested: p.id === "premium",
+      })),
+      EXPENSIVE_RECOMMENDATION
+    ),
+    decision: {
+      verdict: "APPROVED",
+      metrics: {
+        intentMatch: Math.round(
+          EXPENSIVE_RECOMMENDATION.recommended.components.relevance
+        ),
+        priceEfficiency: Math.round(
+          EXPENSIVE_RECOMMENDATION.recommended.components.priceEfficiency
+        ),
+        budgetImpact: "Low",
+        providerRisk: "Low",
+      },
+      reason: EXPENSIVE_RECOMMENDATION.explanation,
+      recommendation: `${EXPENSIVE_RECOMMENDATION.recommended.provider.name} — cheapest eligible vs PremiumData.`,
+      savingsUsd: EXPENSIVE_RECOMMENDATION.savingsUsd,
+      selectedProvider: EXPENSIVE_RECOMMENDATION.recommended.provider.name,
+      selectedAmountUsd:
+        EXPENSIVE_RECOMMENDATION.recommended.provider.priceUsd,
+    },
+    factors: [
+      "Mission need: historical market data.",
+      "Requested PremiumData at $0.40 — significantly above alternatives.",
+      EXPENSIVE_RECOMMENDATION.explanation,
+      "Purchase is within mission budget.",
+      "Selector: cheapest eligible provider (deterministic).",
+    ],
+    payment: {
+      asset: "USDC",
+      amountUsd: EXPENSIVE_RECOMMENDATION.recommended.provider.priceUsd,
+      destination: EXPENSIVE_RECOMMENDATION.recommended.provider.name,
+      network: "Solana",
+      status: "SETTLED",
+      txHash: "mock-filled-at-runtime",
+      settledAt: "2026-10-04T09:11:42.000Z",
+    },
+    budgetOnlySays: "$0.40 is within remaining budget → allowed",
+    veraSays:
+      "PremiumData works, but Lite meets requirements at 95% lower cost → recommend Lite",
+  },
+  ask: {
+    id: "ask",
+    label: "Human Approval",
+    blurb:
+      "Legitimate mission purchase — Vera selects Lite, then requires explicit human approval before x402.",
+    mission: SHARED_MISSION,
+    request: {
+      purpose: "Historical SOL market data",
+      provider: "MarketData Pro",
+      priceUsd: 0.08,
+      agentName: "research-agent-01",
+    },
+    providers: SMART_PROVIDERS_TAGGED,
+    decision: {
+      verdict: "ASK",
+      metrics: {
+        intentMatch: Math.round(
+          ASK_RECOMMENDATION.recommended.components.relevance
+        ),
+        priceEfficiency: Math.round(
+          ASK_RECOMMENDATION.recommended.components.priceEfficiency
+        ),
+        budgetImpact: "Low",
+        providerRisk: "Low",
+      },
+      reason:
+        "Purchase matches the mission and a cheaper provider was selected, but policy requires explicit human approval before any x402 payment.",
+      recommendation: `${ASK_RECOMMENDATION.recommended.provider.name} at $${ASK_RECOMMENDATION.recommended.provider.priceUsd.toFixed(2)} — awaiting human approval.`,
+      savingsUsd: ASK_RECOMMENDATION.savingsUsd,
+      selectedProvider: ASK_RECOMMENDATION.recommended.provider.name,
+      selectedAmountUsd: ASK_RECOMMENDATION.recommended.provider.priceUsd,
+    },
+    factors: [
+      "Mission need: historical market data.",
+      "Cheapest eligible provider selected (Lite).",
+      "Spend is within budget.",
+      "Policy class: human confirmation required.",
+      "No x402 payment until Approve.",
+    ],
+    payment: {
+      asset: "USDC",
+      amountUsd: ASK_RECOMMENDATION.recommended.provider.priceUsd,
+      destination: ASK_RECOMMENDATION.recommended.provider.name,
+      network: "Solana",
+      status: "PENDING",
+      txHash: "—",
+      settledAt: "—",
+    },
+    budgetOnlySays: "$0.08 is within remaining budget → allowed",
+    veraSays: "Mission fit OK → ASK human before payment",
   },
 };
 

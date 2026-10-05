@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="Vera">
+  <!-- Many options ’ one decision. Outer envelope reads as V. -->
+  <g stroke="#0A0A0B" stroke-width="1.45" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M5 6.25 L16 24.1"/>
+    <path d="M10.5 6.25 L16 24.1"/>
+    <path d="M16 6.25 L16 24.1"/>
+    <path d="M21.5 6.25 L16 24.1"/>
+    <path d="M27 6.25 L16 24.1"/>
+  </g>
+  <circle cx="16" cy="25.55" r="1.35" fill="#4F5BD5"/>
+</svg>

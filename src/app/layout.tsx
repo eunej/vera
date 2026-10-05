@@ -27,6 +27,9 @@ export const metadata: Metadata = {
   title: "Vera — Agent Procurement Intelligence",
   description:
     "Mission. Need. Options. Recommendation. Policy. Purchase. Receipt.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({

@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * LEGACY UI — unused by the primary Vera demo.
+ * Live payments render `LivePaymentPanel` and only show Settled after real x402.
+ */
+
 import { Check, Loader2 } from "lucide-react";
 import { SolanaMark } from "@/components/solana-mark";
 import type { PaymentReceipt, SettlementStatus } from "@/lib/settlement";

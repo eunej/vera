@@ -21,6 +21,7 @@ import {
   explorerTxUrl,
   usdcToBaseUnits,
 } from "@/lib/x402/constants";
+import type { TraceEmitter } from "@/lib/x402/trace";
 
 export type LivePaymentResult = {
   ok: true;
@@ -37,6 +38,11 @@ export type LivePaymentFailure = {
   error: string;
   status?: number;
   detail?: string;
+};
+
+export type ExecutePaymentOptions = {
+  /** Emit real protocol steps (402 challenge, signing, settlement). */
+  onTrace?: TraceEmitter;
 };
 
 let cachedFetch: typeof fetch | null = null;
@@ -65,7 +71,6 @@ async function getPaidFetch(): Promise<typeof fetch> {
 
   const client = new x402Client();
 
-  // Hard spend controls at the x402 layer (defense in depth after Vera policy).
   client.registerPolicy((_version, requirements) =>
     requirements.filter(
       ({ network, asset, amount }) =>
@@ -76,11 +81,35 @@ async function getPaidFetch(): Promise<typeof fetch> {
   );
 
   client.register(SOLANA_DEVNET, new ExactSvmScheme(signer));
-  // Also register wildcard for library matching.
   client.register("solana:*", new ExactSvmScheme(signer));
 
   cachedFetch = wrapFetchWithPayment(fetch, client);
   return cachedFetch;
+}
+
+function decodePaymentRequired(header: string): {
+  amountUsd?: number;
+  network?: string;
+  error?: string;
+} {
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(header, "base64").toString("utf8")
+    ) as {
+      error?: string;
+      accepts?: Array<{ amount?: string; network?: string }>;
+    };
+    const accept = decoded.accepts?.[0];
+    const amountUsd =
+      accept?.amount != null ? Number(accept.amount) / 1e6 : undefined;
+    return {
+      amountUsd: Number.isFinite(amountUsd) ? amountUsd : undefined,
+      network: accept?.network,
+      error: decoded.error,
+    };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -88,9 +117,55 @@ async function getPaidFetch(): Promise<typeof fetch> {
  * Only call AFTER Vera policyDecision === "APPROVE".
  */
 export async function executeX402Payment(
-  resourceUrl: string
+  resourceUrl: string,
+  options: ExecutePaymentOptions = {}
 ): Promise<LivePaymentResult | LivePaymentFailure> {
+  const onTrace = options.onTrace;
+
   try {
+    // Real unpaid probe — surfaces the actual 402 / PAYMENT-REQUIRED challenge.
+    const probe = await fetch(resourceUrl, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    const requiredHeader =
+      probe.headers.get("PAYMENT-REQUIRED") ??
+      probe.headers.get("payment-required");
+
+    let challengeAmountUsd: number | undefined;
+    if (probe.status === 402 && requiredHeader) {
+      const challenge = decodePaymentRequired(requiredHeader);
+      challengeAmountUsd = challenge.amountUsd;
+      onTrace?.({
+        type: "x402",
+        detail: "Payment requirement received",
+        amountUsd: challenge.amountUsd,
+        network: challenge.network,
+      });
+    } else if (probe.status === 402) {
+      onTrace?.({
+        type: "x402",
+        detail: "Payment requirement received",
+      });
+    } else {
+      return {
+        ok: false,
+        error: `Expected HTTP 402 Payment Required from provider, got ${probe.status}`,
+        status: probe.status,
+        detail: (await probe.text().catch(() => "")).slice(0, 500),
+      };
+    }
+
+    onTrace?.({ type: "solana", detail: "Signing payment..." });
+
+    if (challengeAmountUsd != null) {
+      onTrace?.({
+        type: "settlement",
+        amountUsd: challengeAmountUsd,
+        asset: "USDC",
+      });
+    }
+
     const paidFetch = await getPaidFetch();
     const response = await paidFetch(resourceUrl, {
       method: "GET",
@@ -99,26 +174,17 @@ export async function executeX402Payment(
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      // On a failed paid retry, x402 re-issues PAYMENT-REQUIRED with the
-      // facilitator invalidReason (e.g. simulation failed / missing USDC ATA).
-      const requiredHeader =
+      const retryHeader =
         response.headers.get("PAYMENT-REQUIRED") ??
         response.headers.get("payment-required");
       let facilitatorDetail = body.slice(0, 500);
-      if (requiredHeader) {
-        try {
-          const decoded = JSON.parse(
-            Buffer.from(requiredHeader, "base64").toString("utf8")
-          ) as { error?: string; accepts?: unknown };
-          facilitatorDetail = decoded.error
-            ? `${decoded.error}${body ? ` — ${body.slice(0, 200)}` : ""}`
-            : facilitatorDetail;
-        } catch {
-          /* keep body */
+      if (retryHeader) {
+        const decoded = decodePaymentRequired(retryHeader);
+        if (decoded.error) {
+          facilitatorDetail = `${decoded.error}${body ? ` — ${body.slice(0, 200)}` : ""}`;
         }
       }
 
-      // Common Devnet setup failure — make it actionable.
       const hint =
         facilitatorDetail.includes("simulation_failed") ||
         facilitatorDetail.includes("InvalidAccountData")
@@ -158,7 +224,20 @@ export async function executeX402Payment(
       };
     }
 
+    // Only after facilitator PAYMENT-RESPONSE reports success + tx signature.
+    onTrace?.({
+      type: "confirmed",
+      network: "Solana Devnet",
+      transaction: settlement.transaction,
+      explorerUrl: explorerTxUrl(settlement.transaction),
+    });
+
     const resource = await response.json();
+
+    onTrace?.({
+      type: "resource",
+      detail: "Historical data received",
+    });
 
     return {
       ok: true,

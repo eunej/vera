@@ -1,8 +1,8 @@
 /**
  * Settlement adapter contract.
  *
- * Current demo uses MockSolanaSettlementAdapter (no custody, no signing).
- * A production x402 / Solana SPL USDC adapter can implement this same interface.
+ * LEGACY interface for the unused mock adapter.
+ * Primary demo uses real x402 (`src/lib/x402/*`), not this interface.
  */
 
 export type SettlementNetwork = "solana";

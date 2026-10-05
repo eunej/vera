@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
-import {
-  makeProcurementDecision,
-  providerResourcePath,
-} from "@/lib/x402/decision";
-import { SOLANA_DEVNET } from "@/lib/x402/constants";
+import { runVeraProcurement } from "@/lib/x402/procure";
 import type { ProcureResponse } from "@/lib/x402/types";
-// x402 client is dynamically imported ONLY after APPROVE — policy cannot be bypassed
-// by loading payment code on BLOCK/ASK paths.
+import type { ProcureTraceEvent } from "@/lib/x402/trace";
+import type { PurchaseIntent } from "@/lib/x402/decision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type ScenarioId = "smart" | "suspicious" | "expensive" | "ask";
+
 type ProcureBody = {
-  scenario?: "smart" | "suspicious";
+  scenario?: ScenarioId;
   confirmAsk?: boolean;
+  stream?: boolean;
   missionId?: string;
   mission?: string;
   purpose?: string;
@@ -22,106 +21,99 @@ type ProcureBody = {
   remainingBudgetUsd?: number;
 };
 
-export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as ProcureBody;
-  const scenario = body.scenario ?? "smart";
-
-  const intent =
-    scenario === "suspicious"
-      ? {
-          missionId: body.missionId ?? "mission-depin-1",
-          mission:
-            body.mission ?? "Research the top Solana DePIN projects",
-          purpose: body.purpose ?? "Premium gaming data subscription",
-          requestedProvider: body.requestedProvider ?? "Premium Gaming API",
-          requestedPrice: body.requestedPrice ?? 3.2,
-          remainingBudgetUsd: body.remainingBudgetUsd ?? 4.84,
-        }
-      : {
-          missionId: body.missionId ?? "mission-depin-1",
-          mission:
-            body.mission ?? "Research the top Solana DePIN projects",
-          purpose: body.purpose ?? "Historical SOL market data",
-          requestedProvider: body.requestedProvider ?? "MarketData Pro",
-          requestedPrice: body.requestedPrice ?? 0.08,
-          remainingBudgetUsd: body.remainingBudgetUsd ?? 4.84,
-        };
-
-  // 1) Vera policy decision BEFORE any payment signing.
-  const decision = makeProcurementDecision(intent);
-
-  if (decision.policyDecision === "BLOCK") {
-    const response: ProcureResponse = {
-      decision,
-      live: true,
-      payment: {
-        status: "blocked",
-        message:
-          "BLOCKED BEFORE PAYMENT — no Solana transaction was created.",
-      },
-    };
-    return NextResponse.json(response);
-  }
-
-  if (decision.policyDecision === "ASK" && !body.confirmAsk) {
-    const response: ProcureResponse = {
-      decision,
-      live: true,
-      payment: {
-        status: "ask",
-        message: "Human confirmation required before x402 payment.",
-      },
-    };
-    return NextResponse.json(response);
-  }
-
-  if (decision.policyDecision !== "APPROVE" && !body.confirmAsk) {
-    return NextResponse.json(
-      {
-        decision,
-        live: true,
-        payment: {
-          status: "failed",
-          message: "Unexpected policy state — payment refused.",
-        },
-      } satisfies ProcureResponse,
-      { status: 400 }
-    );
-  }
-
-  // 2) Only after APPROVE (or confirmed ASK): load + execute real x402 payment.
-  const providerBase =
-    process.env.PROVIDER_BASE_URL ?? "http://127.0.0.1:4021";
-  const path = providerResourcePath(decision.recommendedProvider);
-  const resourceUrl = `${providerBase.replace(/\/$/, "")}${path}`;
-
-  const { executeX402Payment } = await import("@/lib/x402/client");
-  const paid = await executeX402Payment(resourceUrl);
-
-  if (!paid.ok) {
-    const response: ProcureResponse = {
-      decision,
-      live: true,
-      payment: {
-        status: "failed",
-        message: paid.error,
-        detail: paid.detail,
-      },
-    };
-    return NextResponse.json(response, { status: 502 });
-  }
-
-  const response: ProcureResponse = {
-    decision,
-    live: true,
-    payment: {
-      status: "settled",
-      transaction: paid.transaction,
-      explorerUrl: paid.explorerUrl,
-      network: SOLANA_DEVNET,
-      resource: paid.resource,
-    },
+function buildIntent(body: ProcureBody): PurchaseIntent {
+  const scenario: ScenarioId = body.scenario ?? "smart";
+  const base = {
+    missionId: body.missionId ?? "mission-depin-1",
+    mission: body.mission ?? "Research the top Solana DePIN projects",
+    remainingBudgetUsd: body.remainingBudgetUsd ?? 4.84,
+    scenario,
   };
 
-  return NextResponse.json(response);
+  switch (scenario) {
+    case "suspicious":
+      return {
+        ...base,
+        purpose: body.purpose ?? "Premium gaming data subscription",
+        requestedProvider: body.requestedProvider ?? "Premium Gaming API",
+        requestedPrice: body.requestedPrice ?? 3.2,
+      };
+    case "expensive":
+      return {
+        ...base,
+        purpose: body.purpose ?? "Historical SOL market data",
+        requestedProvider: body.requestedProvider ?? "PremiumData",
+        requestedPrice: body.requestedPrice ?? 0.4,
+      };
+    case "ask":
+      return {
+        ...base,
+        purpose: body.purpose ?? "Historical SOL market data",
+        requestedProvider: body.requestedProvider ?? "MarketData Pro",
+        requestedPrice: body.requestedPrice ?? 0.08,
+      };
+    case "smart":
+    default:
+      return {
+        ...base,
+        purpose: body.purpose ?? "Historical SOL market data",
+        requestedProvider: body.requestedProvider ?? "MarketData Pro",
+        requestedPrice: body.requestedPrice ?? 0.08,
+      };
+  }
+}
+
+export async function POST(req: Request) {
+  const body = (await req.json().catch(() => ({}))) as ProcureBody;
+  const intent = buildIntent(body);
+  const wantsStream =
+    body.stream === true ||
+    (req.headers.get("accept") ?? "").includes("application/x-ndjson");
+
+  if (!wantsStream) {
+    const result: ProcureResponse = await runVeraProcurement({
+      intent,
+      confirmAsk: body.confirmAsk,
+    });
+
+    if (
+      result.payment?.status === "failed" &&
+      result.payment.message.includes("Unexpected policy")
+    ) {
+      return NextResponse.json(result, { status: 400 });
+    }
+    if (result.payment?.status === "failed") {
+      return NextResponse.json(result, { status: 502 });
+    }
+    return NextResponse.json(result);
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: ProcureTraceEvent) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+      try {
+        await runVeraProcurement(
+          { intent, confirmAsk: body.confirmAsk },
+          { onEvent: send }
+        );
+      } catch (err) {
+        send({
+          type: "failed",
+          message: err instanceof Error ? err.message : "Procurement failed",
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
 }

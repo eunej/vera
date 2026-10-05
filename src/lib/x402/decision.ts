@@ -34,8 +34,11 @@ export type PurchaseIntent = {
   requestedProvider: string;
   requestedPrice: number;
   remainingBudgetUsd: number;
+  /** Demo scenario hint — drives ASK vs APPROVE without weakening BLOCK rules. */
+  scenario?: "smart" | "suspicious" | "expensive" | "ask";
 };
 
+/** Catalog evaluated by the live procurement engine (matches Smart Purchase UI). */
 const LIVE_PROVIDERS: Provider[] = [
   {
     id: "lite",
@@ -55,6 +58,15 @@ const LIVE_PROVIDERS: Provider[] = [
     relevance: 99,
     risk: 96,
     requested: true,
+  },
+  {
+    id: "premium",
+    name: "PremiumData",
+    priceUsd: 0.4,
+    quality: 98,
+    reliability: 99,
+    relevance: 99,
+    risk: 95,
   },
 ];
 
@@ -115,7 +127,7 @@ export function makeProcurementDecision(
     Math.round((intent.requestedPrice - recommended.priceUsd) * 100) / 100
   );
 
-  return {
+  const base = {
     missionId: intent.missionId,
     resource: intent.purpose,
     provider: recommended.name,
@@ -124,10 +136,24 @@ export function makeProcurementDecision(
     savings,
     intentScore: Math.round(rec.recommended.components.relevance),
     riskScore: Math.round(rec.recommended.components.riskScore),
-    policyDecision: "APPROVE",
-    reason: rec.explanation,
     recommendedProvider: recommended.name,
     requestedProvider: intent.requestedProvider,
+  };
+
+  // Legitimate purchase that still requires explicit human confirmation.
+  if (intent.scenario === "ask") {
+    return {
+      ...base,
+      policyDecision: "ASK",
+      reason:
+        "Purchase matches the mission and a cheaper provider was selected, but policy requires explicit human approval before any x402 payment.",
+    };
+  }
+
+  return {
+    ...base,
+    policyDecision: "APPROVE",
+    reason: rec.explanation,
   };
 }
 

@@ -4,7 +4,7 @@ export type DecisionVerdict =
   | "BLOCKED"
   | "OVERRIDE_APPROVED";
 
-export type ScenarioId = "smart" | "suspicious";
+export type ScenarioId = "smart" | "suspicious" | "expensive" | "ask";
 
 export type Provider = {
   id: string;

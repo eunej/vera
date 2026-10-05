@@ -1,0 +1,27 @@
+<!-- Vera wordmark lockup — light -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 168 40" fill="none" role="img" aria-label="Vera">
+  <g transform="translate(0, 6)">
+    <path
+      fill="#0A0A0B"
+      fill-rule="evenodd"
+      d="M5.5 0h17A4.5 4.5 0 0 1 27 4.5v17a4.5 4.5 0 0 1-4.5 4.5h-17A4.5 4.5 0 0 1 1 21.5v-17A4.5 4.5 0 0 1 5.5 0ZM8.2 6.2 14 18.2 19.8 6.2h-1.85L14 14.1 10.05 6.2H8.2Z"
+    />
+  </g>
+  <!-- Distinctive V: segmented left stroke -->
+  <g stroke="#0A0A0B" stroke-width="2.5" stroke-linecap="square" fill="none">
+    <path d="M38 10 L41.1 15.4"/>
+    <path d="M42.4 17.6 L45 22.2"/>
+    <path d="M46.1 24.2 L47.8 27.2"/>
+    <path d="M58.2 10 L47.8 27.2"/>
+  </g>
+  <!-- era — geometric, understated -->
+  <text
+    x="66"
+    y="26.5"
+    fill="#0A0A0B"
+    font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="22"
+    font-weight="500"
+    letter-spacing="-0.01em"
+  >era</text>
+</svg>

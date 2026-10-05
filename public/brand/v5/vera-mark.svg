@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="Vera">
+  <!-- Outer envelope  marketplace frame -->
+  <path d="M5.2 6.2 L14.6 25.6" stroke="#0A0A0B" stroke-width="2.15" stroke-linecap="square"/>
+  <path d="M26.8 6.2 L17.4 25.6" stroke="#0A0A0B" stroke-width="2.15" stroke-linecap="square"/>
+  <!-- Inner path  agent resolving to decision -->
+  <path d="M10.6 12.8 L16 23.2 L21.4 12.8" stroke="#0A0A0B" stroke-width="1.7" stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- Nodes -->
+  <circle cx="10.6" cy="12.8" r="1.85" fill="#0A0A0B"/>
+  <circle cx="21.4" cy="12.8" r="1.85" fill="#0A0A0B"/>
+  <circle cx="16" cy="24.35" r="2" fill="#4F5BE7"/>
+</svg>
