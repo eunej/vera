@@ -24,9 +24,9 @@ const display = Syne({
 });
 
 export const metadata: Metadata = {
-  title: "Vera — Agent Procurement Intelligence",
+  title: "Vera — Intent to settlement for machine-paid APIs",
   description:
-    "Mission. Need. Options. Recommendation. Policy. Purchase. Receipt.",
+    "Agent procurement intelligence: intent, compare, policy, decide, settle, receipt — before any USDC moves.",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },

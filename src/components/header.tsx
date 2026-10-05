@@ -23,10 +23,10 @@ export function Header() {
 
         <div className="flex shrink-0 items-center gap-3 sm:gap-4">
           <Link
-            href="/story"
+            href="/demo"
             className="hidden text-xs font-medium text-muted-foreground transition hover:text-foreground sm:inline"
           >
-            Why Vera
+            Live demo
           </Link>
           <div className="flex items-center gap-2 rounded-md border border-[hsl(var(--line))] bg-secondary/60 px-2.5 py-1.5 sm:px-3">
             <span className="status-dot size-2 rounded-full bg-primary" />

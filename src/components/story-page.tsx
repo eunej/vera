@@ -150,7 +150,7 @@ function Hero() {
           </p>
           <div className="story-reveal story-d3 mt-8 flex flex-wrap items-center gap-3">
             <Link
-              href="/"
+              href="/demo"
               className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
             >
               Run the live demo
@@ -596,7 +596,7 @@ function CloseSection() {
           </p>
         </div>
         <Link
-          href="/"
+          href="/demo"
           className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
         >
           Open the procurement demo
