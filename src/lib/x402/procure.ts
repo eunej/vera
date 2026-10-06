@@ -18,6 +18,7 @@ import { SOLANA_DEVNET } from "@/lib/x402/constants";
 import type { ProcureResponse } from "@/lib/x402/types";
 import type { LivePaymentFailure, LivePaymentResult } from "@/lib/x402/client";
 import type { TraceEmitter } from "@/lib/x402/trace";
+import { resolveProviderBaseUrl } from "@/lib/x402/provider-url";
 
 export type ProcureInput = {
   intent: PurchaseIntent;
@@ -39,21 +40,6 @@ function resolveMaxPaymentUsd(explicit?: number): number {
   if (typeof explicit === "number" && Number.isFinite(explicit)) return explicit;
   const fromEnv = Number(process.env.VERA_MAX_PAYMENT_USD ?? "0.10");
   return Number.isFinite(fromEnv) ? fromEnv : 0.10;
-}
-
-/** Prefer same-origin Next provider routes (works on Vercel). */
-export function resolveProviderBaseUrl(): string {
-  if (process.env.PROVIDER_BASE_URL?.trim()) {
-    return process.env.PROVIDER_BASE_URL.trim().replace(/\/$/, "");
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`;
-  }
-  if (process.env.NEXT_PUBLIC_APP_URL?.trim()) {
-    return process.env.NEXT_PUBLIC_APP_URL.trim().replace(/\/$/, "");
-  }
-  // Local Next.js embeds /api/provider/* — no separate :4021 required.
-  return "http://127.0.0.1:3000";
 }
 
 function emitIntentNeed(intent: PurchaseIntent, onEvent?: TraceEmitter) {

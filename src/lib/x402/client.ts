@@ -22,6 +22,7 @@ import {
   usdcToBaseUnits,
 } from "@/lib/x402/constants";
 import type { TraceEmitter } from "@/lib/x402/trace";
+import { providerFetchHeaders } from "@/lib/x402/provider-url";
 
 export type LivePaymentResult = {
   ok: true;
@@ -126,7 +127,7 @@ export async function executeX402Payment(
     // Real unpaid probe — surfaces the actual 402 / PAYMENT-REQUIRED challenge.
     const probe = await fetch(resourceUrl, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: providerFetchHeaders(),
     });
     const requiredHeader =
       probe.headers.get("PAYMENT-REQUIRED") ??
@@ -169,7 +170,7 @@ export async function executeX402Payment(
     const paidFetch = await getPaidFetch();
     const response = await paidFetch(resourceUrl, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: providerFetchHeaders(),
     });
 
     if (!response.ok) {
