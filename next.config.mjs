@@ -9,6 +9,8 @@ const nextConfig = {
       "@x402/fetch",
       "@x402/svm",
       "@x402/core",
+      "@x402/express",
+      "express",
       "@scure/base",
     ],
   },

@@ -41,6 +41,21 @@ function resolveMaxPaymentUsd(explicit?: number): number {
   return Number.isFinite(fromEnv) ? fromEnv : 0.10;
 }
 
+/** Prefer same-origin Next provider routes (works on Vercel). */
+export function resolveProviderBaseUrl(): string {
+  if (process.env.PROVIDER_BASE_URL?.trim()) {
+    return process.env.PROVIDER_BASE_URL.trim().replace(/\/$/, "");
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`;
+  }
+  if (process.env.NEXT_PUBLIC_APP_URL?.trim()) {
+    return process.env.NEXT_PUBLIC_APP_URL.trim().replace(/\/$/, "");
+  }
+  // Local Next.js embeds /api/provider/* — no separate :4021 required.
+  return "http://127.0.0.1:3000";
+}
+
 function emitIntentNeed(intent: PurchaseIntent, onEvent?: TraceEmitter) {
   onEvent?.({ type: "intent", mission: intent.mission });
   onEvent?.({ type: "need", resource: intent.purpose });
@@ -160,9 +175,7 @@ export async function runVeraProcurement(
   }
 
   const providerBase =
-    deps.providerBaseUrl ??
-    process.env.PROVIDER_BASE_URL ??
-    "http://127.0.0.1:4021";
+    deps.providerBaseUrl ?? resolveProviderBaseUrl();
   const path = providerResourcePath(decision.recommendedProvider);
   const resourceUrl = `${providerBase.replace(/\/$/, "")}${path}`;
 
